@@ -25,7 +25,13 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+/**
+ * Get total number of getpid calls
+ */
 int getpidcount(void);
+/**
+ * Get total number of syscalls
+ */
 int syscallcount(void);
 
 // user library functions (ulib.c)

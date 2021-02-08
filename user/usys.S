@@ -29,5 +29,7 @@ SYSCALL(getpid)
 SYSCALL(sbrk)
 SYSCALL(sleep)
 SYSCALL(uptime)
+// Generate assembly for getpidcount syscall and issuing the trap instruction
 SYSCALL(getpidcount)
+// Generate assembly for syscallcount syscall and issuing the trap instruction
 SYSCALL(syscallcount)

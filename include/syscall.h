@@ -23,7 +23,9 @@
 #define SYS_sbrk            19
 #define SYS_sleep           20
 #define SYS_uptime          21
+// System call to get number of times getpid was called
 #define SYS_getpidcount     22
+// System call to get number of times a system call was called
 #define SYS_syscallcount    23
 
 #endif // _SYSCALL_H_

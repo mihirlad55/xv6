@@ -23,7 +23,13 @@ int sys_unlink(void);
 int sys_wait(void);
 int sys_write(void);
 int sys_uptime(void);
+/**
+ * Get the number of sys_getpid calls
+ */
 int sys_getpidcount(void);
+/**
+ * Get the number of total syscalls
+ */
 int sys_syscallcount(void);
 
 #endif // _SYSFUNC_H_

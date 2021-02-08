@@ -46,3 +46,5 @@ Bochs makes debugging easier, but QEMU is much faster.
 To run in Bochs, run "make bochs" and then type "c" at the bochs prompt.
 To run in QEMU, run "make qemu".
 
+
+binutils 2.36 causes boot loop

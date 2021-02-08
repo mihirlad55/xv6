@@ -6,7 +6,9 @@
 #include "proc.h"
 #include "sysfunc.h"
 
+// Number of getpid calls
 int getpid_count = 0;
+// Number of times a syscall was invoked
 int syscall_count = 0;
 
 int
@@ -96,11 +98,13 @@ sys_uptime(void)
 int
 sys_getpidcount(void)
 {
+  // Return number of getpid function calls
   return getpid_count;
 }
 
 int
 sys_syscallcount(void)
 {
+  // Return number of system calls
   return syscall_count;
 }
