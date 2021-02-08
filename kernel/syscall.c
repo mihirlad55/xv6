@@ -7,6 +7,8 @@
 #include "syscall.h"
 #include "sysfunc.h"
 
+extern int syscall_count;
+
 // User code makes a system call with INT T_SYSCALL.
 // System call number in %eax.
 // Arguments on the stack, from the user call to the C
@@ -82,27 +84,29 @@ argstr(int n, char **pp)
 
 // array of function pointers to handlers for all the syscalls
 static int (*syscalls[])(void) = {
-[SYS_chdir]   sys_chdir,
-[SYS_close]   sys_close,
-[SYS_dup]     sys_dup,
-[SYS_exec]    sys_exec,
-[SYS_exit]    sys_exit,
-[SYS_fork]    sys_fork,
-[SYS_fstat]   sys_fstat,
-[SYS_getpid]  sys_getpid,
-[SYS_kill]    sys_kill,
-[SYS_link]    sys_link,
-[SYS_mkdir]   sys_mkdir,
-[SYS_mknod]   sys_mknod,
-[SYS_open]    sys_open,
-[SYS_pipe]    sys_pipe,
-[SYS_read]    sys_read,
-[SYS_sbrk]    sys_sbrk,
-[SYS_sleep]   sys_sleep,
-[SYS_unlink]  sys_unlink,
-[SYS_wait]    sys_wait,
-[SYS_write]   sys_write,
-[SYS_uptime]  sys_uptime,
+[SYS_chdir]         sys_chdir,
+[SYS_close]         sys_close,
+[SYS_dup]           sys_dup,
+[SYS_exec]          sys_exec,
+[SYS_exit]          sys_exit,
+[SYS_fork]          sys_fork,
+[SYS_fstat]         sys_fstat,
+[SYS_getpid]        sys_getpid,
+[SYS_kill]          sys_kill,
+[SYS_link]          sys_link,
+[SYS_mkdir]         sys_mkdir,
+[SYS_mknod]         sys_mknod,
+[SYS_open]          sys_open,
+[SYS_pipe]          sys_pipe,
+[SYS_read]          sys_read,
+[SYS_sbrk]          sys_sbrk,
+[SYS_sleep]         sys_sleep,
+[SYS_unlink]        sys_unlink,
+[SYS_wait]          sys_wait,
+[SYS_write]         sys_write,
+[SYS_uptime]        sys_uptime,
+[SYS_getpidcount]   sys_getpidcount,
+[SYS_syscallcount]  sys_syscallcount,
 };
 
 // Called on a syscall trap. Checks that the syscall number (passed via eax)
@@ -111,6 +115,7 @@ void
 syscall(void)
 {
   int num;
+  syscall_count++;
   
   num = proc->tf->eax;
   if(num > 0 && num < NELEM(syscalls) && syscalls[num] != NULL) {
