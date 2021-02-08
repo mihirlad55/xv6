@@ -1,0 +1,11 @@
+*.o
+*.d
+*.out
+*.img
+
+/bootother
+/kernel
+/user/bin
+/initcode
+/tools/mkfs
+/fs
