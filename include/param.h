@@ -15,5 +15,10 @@
 #define USERTOP  0xA0000 // end of user address space
 #define PHYSTOP  0x1000000 // use phys mem up to here as free pool
 #define MAXARG       32  // max exec arguments
+#define MAX_TICKETS 200  // maximum number of tickets a process can have
+#define MIN_TICKETS  10  // minimum number of tickets a process can have
+#define DEFAULT_TICKETS 10 // default number of tickets that a process starts with
+#define TICKET_MULTIPLE 10 // process tickets must be a multiple of this number
+#define STRIDE_FACTOR 10000 // stride is calculated by dividing this value
 
 #endif // _PARAM_H_

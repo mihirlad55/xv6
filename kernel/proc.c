@@ -5,6 +5,7 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "pstat.h"
 
 struct {
   struct spinlock lock;
@@ -23,6 +24,36 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
+}
+
+/**
+ * Get the minimum number of passes that a valid process has (not 0).
+ * ptable.lock must be acquired for this function. If all processes have a pass
+ * of 0, 0 will be returned.
+ *
+ * @return The minimum pass value of all processes (not including 0), 0 if all
+ * pass values are 0
+ */
+static int
+getminpass(void)
+{
+  struct proc *p;
+
+  // Largest positive number for int
+  int min_pass = 0x7FFFFFFF;
+
+  // Get minimum runnable process pass value
+  for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    // Update minimum pass value and only consider RUNNABLE processes
+    if (p->state == RUNNABLE && p->pass != 0 && p->pass < min_pass)
+      min_pass = p->pass;
+  }
+
+  // If no process running with pass > 0, set min_pass to 0
+  if (min_pass == 0x7FFFFFFF)
+    min_pass = 0;
+
+  return min_pass;
 }
 
 // Look in the process table for an UNUSED proc.
@@ -45,6 +76,12 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  // Set default amount of tickets
+  p->tickets = DEFAULT_TICKETS;
+  // Update processor stride
+  p->stride = STRIDE_FACTOR / p->tickets;
+  // Get minimum pass of all runnable processes
+  p->pass = getminpass();
   release(&ptable.lock);
 
   // Allocate kernel stack if possible.
@@ -77,7 +114,7 @@ userinit(void)
 {
   struct proc *p;
   extern char _binary_initcode_start[], _binary_initcode_size[];
-  
+
   p = allocproc();
   acquire(&ptable.lock);
   initproc = p;
@@ -144,6 +181,10 @@ fork(void)
   np->sz = proc->sz;
   np->parent = proc;
   *np->tf = *proc->tf;
+
+  // Copy tickets and stride
+  np->tickets = proc->tickets;
+  np->stride = proc->stride;
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
@@ -256,6 +297,7 @@ void
 scheduler(void)
 {
   struct proc *p;
+  struct proc *to_sched_p = NULL;
 
   for(;;){
     // Enable interrupts on this processor.
@@ -267,21 +309,33 @@ scheduler(void)
       if(p->state != RUNNABLE)
         continue;
 
+      // Set to first runnable process
+      if (!to_sched_p)
+        to_sched_p = p;
+      // Else if process has lower pass value, set to_sched_p
+      else if (p->pass < to_sched_p->pass)
+        to_sched_p = p;
+    }
+
+    if (to_sched_p) {
+      proc = to_sched_p;
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
-      proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
+      switchuvm(proc);
+      proc->state = RUNNING;
       swtch(&cpu->scheduler, proc->context);
       switchkvm();
 
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      proc = 0;
+      proc->ticks++;
+      proc->pass += proc->stride;
     }
-    release(&ptable.lock);
 
+    // Process is done running for now.
+    // It should have changed its p->state before coming back.
+    proc = 0;
+    to_sched_p = 0;
+    release(&ptable.lock);
   }
 }
 
@@ -370,9 +424,15 @@ wakeup1(void *chan)
 {
   struct proc *p;
 
+  // Get minimum pass value
+  int min_pass = getminpass();
+
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
+    if(p->state == SLEEPING && p->chan == chan) {
+      // Set minimum pass to avoid process gaming
+      p->pass = min_pass;
       p->state = RUNNABLE;
+    }
 }
 
 // Wake up all processes sleeping on chan.
@@ -443,4 +503,78 @@ procdump(void)
   }
 }
 
+/**
+ * Get array of process info that includes if the process is in use, the number
+ * of tickets, PID, number of ticks, stride, and pass value.
+ *
+ * @param pstats Pointer to array of NPROC pstat structs
+ *
+ * @return Pointer to array of NPROC pstat structures.
+ */
+void
+getpinfo(struct pstat *pstats)
+{
+  struct proc *p;
+  int i;
+
+  // Acquire lock
+  acquire(&ptable.lock);
+
+  // Populate pstats array
+  for(p = ptable.proc, i = 0; p < &ptable.proc[NPROC]; p++, i++) {
+    // pstat is not allocated for unused processes
+    // Use empty struct for unused, zombie, and embryo processes
+    if (p->state == UNUSED) {
+      memset(pstats + i, 0, sizeof(struct pstat));
+    } else {
+      // ZOMBIE and EMBRYO processes are considered not in use, but may still
+      // have values set
+      if (p->state == ZOMBIE || p->state == EMBRYO)
+        pstats[i].inuse = 0;
+      else
+        pstats[i].inuse = 1;
+
+      // Copy rest of pstat info
+      pstats[i].tickets = p->tickets;
+      pstats[i].pid = p->pid;
+      pstats[i].ticks = p->ticks;
+      pstats[i].stride = p->stride;
+      pstats[i].pass = p->pass;
+    }
+  }
+
+  // Release lock
+  release(&ptable.lock);
+}
+
+/**
+ * Assign the current process's tickets with validation.
+ *
+ * @param tickets The number of tickets to assign. This must be between
+ * MIN_TICKETS and MAX_TICKETS and be a multiple of TICKET_MULTIPLE.
+ *
+ * @return 0 on success, -1 if invalid number of tickets specified.
+ */
+int
+assigntickets(int tickets)
+{
+  // Acquire lock
+  acquire(&ptable.lock);
+
+  // Make sure ticket is within allowed parameters
+  if (tickets >= MAX_TICKETS || tickets <= MIN_TICKETS || tickets % TICKET_MULTIPLE) {
+    // Release lock
+    release(&ptable.lock);
+    return -1;
+  }
+
+  // Update tickets and stride for process
+  proc->tickets = tickets;
+  proc->stride = STRIDE_FACTOR / tickets;
+
+  // Release lock
+  release(&ptable.lock);
+
+  return 0;
+}
 
